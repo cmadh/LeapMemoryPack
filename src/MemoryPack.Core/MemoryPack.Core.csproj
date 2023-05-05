@@ -74,6 +74,10 @@
     <ItemGroup>
         <TargetFiles1 Include="$(MSBuildProjectDirectory)\**\*.cs" Exclude="**\bin\**\*.*;**\obj\**\*.*;**\CollectionsMarshalEx.cs;**\ImmutableCollectionFormatters.cs" />
     </ItemGroup>
+    <ItemGroup>
+      <TargetFiles1 Remove="Leap\LeapMemoryPackReader.cs" />
+      <TargetFiles1 Remove="Leap\LeapMemoryPackWriter.cs" />
+    </ItemGroup>
 
     <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="$(TargetFramework) == 'net7.0'">
         <Copy SourceFiles="@(TargetFiles1)" DestinationFiles="$(DestinationRoot)\%(RecursiveDir)%(Filename)%(Extension)" SkipUnchangedFiles="true" />

@@ -283,8 +283,8 @@ public partial class TypeMeta
                 }
             }
 
-            serializeBody = EmitSerializeBody(context.IsForUnity);
-            deserializeBody = EmitDeserializeBody();
+            serializeBody = EmitSerializeBody(context);
+            deserializeBody = EmitDeserializeBody(context);
 
             Members = originalMembers;
         }
@@ -421,7 +421,7 @@ partial {{classOrStructOrRecord}} {{TypeName}}
 
     }
 
-    private string EmitDeserializeBody()
+    private string EmitDeserializeBody(IGeneratorContext context)
     {
         var count = Members.Length;
 
@@ -431,6 +431,7 @@ partial {{classOrStructOrRecord}} {{TypeName}}
         var commentOutInvalidBody = "";
         var circularReferenceBody = "";
         var circularReferenceBody2 = "";
+        var readObjectHeaderBody = "";
 
         if (isVersionTolerant)
         {
@@ -475,12 +476,17 @@ partial {{classOrStructOrRecord}} {{TypeName}}
 """;
         }
 
-        return $$"""
+        if(context.UseObjectHeaders)
+            readObjectHeaderBody = $$"""
         if (!reader.TryReadObjectHeader(out var count))
         {
             value = default!;
             goto END;
         }
+""";
+
+        return $$"""
+{{readObjectHeaderBody}}        
 {{circularReferenceBody}}
 {{readBeginBody}}
 {{circularReferenceBody2}}        
@@ -603,22 +609,22 @@ partial {{classOrStructOrRecord}} {{TypeName}}
         return sb.ToString();
     }
 
-    string EmitSerializeBody(bool isForUnity)
+    string EmitSerializeBody(IGeneratorContext context)
     {
         if (this.GenerateType is GenerateType.VersionTolerant or GenerateType.CircularReference)
         {
             if (Members.All(x => x.Kind is MemberKind.Unmanaged or MemberKind.String or MemberKind.Enum or MemberKind.UnmanagedArray or MemberKind.UnmanagedNullable or MemberKind.Blank))
             {
-                return EmitVersionTorelantSerializeBodyOptimized(isForUnity);
+                return EmitVersionTorelantSerializeBodyOptimized(context);
             }
             else
             {
-                return EmitVersionTorelantSerializeBody(isForUnity);
+                return EmitVersionTorelantSerializeBody(context);
             }
         }
 
         return $$"""
-{{(!IsValueType ? $$"""
+{{(!IsValueType && context.UseObjectHeaders ? $$"""
         if (value == null)
         {
             writer.WriteNullObjectHeader();
@@ -626,13 +632,13 @@ partial {{classOrStructOrRecord}} {{TypeName}}
         }
 """ : "")}}
 
-{{EmitSerializeMembers(Members, "        ", toTempWriter: false, writeObjectHeader: true)}}
+{{EmitSerializeMembers(Members, "        ", toTempWriter: false, writeObjectHeader: context.UseObjectHeaders)}}
 """;
     }
 
-    string EmitVersionTorelantSerializeBody(bool isForUnity)
+    string EmitVersionTorelantSerializeBody(IGeneratorContext context)
     {
-        var newTempWriter = isForUnity
+        var newTempWriter = context.IsForUnity
             ? "new MemoryPackWriter(ref System.Runtime.CompilerServices.Unsafe.As<global::MemoryPack.Internal.ReusableLinkedArrayBufferWriter, System.Buffers.IBufferWriter<byte>>(ref tempBuffer), writer.OptionalState)"
             : "new MemoryPackWriter<global::MemoryPack.Internal.ReusableLinkedArrayBufferWriter>(ref tempBuffer, writer.OptionalState)";
 
@@ -650,7 +656,7 @@ partial {{classOrStructOrRecord}} {{TypeName}}
         }
 
         return $$"""
-{{(!IsValueType ? $$"""
+{{(!IsValueType && context.UseObjectHeaders ? $$"""
         if (value == null)
         {
             writer.WriteNullObjectHeader();
@@ -667,8 +673,9 @@ partial {{classOrStructOrRecord}} {{TypeName}}
 {{EmitSerializeMembers(Members, "            ", toTempWriter: true, writeObjectHeader: false)}}
 
             tempWriter.Flush();
-            
+{{(context.UseObjectHeaders ? $$"""
             writer.WriteObjectHeader({{Members.Length}});
+""" : "")}}
             for (int i = 0; i < {{Members.Length}}; i++)
             {
                 int delta;
@@ -693,7 +700,7 @@ partial {{classOrStructOrRecord}} {{TypeName}}
     }
 
     // Optimized is all member is fixed size
-    string EmitVersionTorelantSerializeBodyOptimized(bool isForUnity)
+    string EmitVersionTorelantSerializeBodyOptimized(IGeneratorContext context)
     {
         static string EmitLengthHeader(MemberMeta[] members)
         {
@@ -719,7 +726,7 @@ partial {{classOrStructOrRecord}} {{TypeName}}
         }
 
         return $$"""
-{{(!IsValueType ? $$"""
+{{(!IsValueType && context.UseObjectHeaders ? $$"""
         if (value == null)
         {
             writer.WriteNullObjectHeader();
@@ -727,9 +734,11 @@ partial {{classOrStructOrRecord}} {{TypeName}}
         }
 """ : "")}}
 {{checkCircularReference}}
+{{(context.UseObjectHeaders ? $$"""
         writer.WriteObjectHeader({{Members.Length}});
+""" : "")}}
 {{EmitLengthHeader(Members)}}
-        {{(GenerateType == GenerateType.CircularReference ? "writer.WriteVarInt(id);" : "")}}
+{{(GenerateType == GenerateType.CircularReference ? "writer.WriteVarInt(id);" : "")}}
 {{EmitSerializeMembers(Members, "        ", toTempWriter: false, writeObjectHeader: false)}}
 """;
     }

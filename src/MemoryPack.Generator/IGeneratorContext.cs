@@ -12,6 +12,8 @@ public interface IGeneratorContext
     LanguageVersion LanguageVersion { get; }
     bool IsNet7OrGreater { get; }
     bool IsForUnity { get; }
+    bool Use7BitEncodedHeaders { get; set; }
+    bool UseObjectHeaders { get; set; }
 }
 
 public static class GeneratorContextExtensions

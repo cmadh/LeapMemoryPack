@@ -296,6 +296,8 @@ public partial class MemoryPackGenerator : IIncrementalGenerator
         public bool IsNet7OrGreater { get; }
 
         public bool IsForUnity => false;
+        public bool Use7BitEncodedHeaders { get; set; } = false;
+        public bool UseObjectHeaders { get; set; } = true;
 
         public void AddSource(string hintName, string source)
         {

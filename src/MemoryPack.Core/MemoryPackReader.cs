@@ -392,7 +392,7 @@ public ref partial struct MemoryPackReader
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)] // non default, no inline
-    string ReadUtf8(int utf8Length)
+    public string ReadUtf8(int utf8Length)
     {
         // (int ~utf8-byte-count, int utf16-length, utf8-bytes)
         // already read utf8 length, but it is complement.

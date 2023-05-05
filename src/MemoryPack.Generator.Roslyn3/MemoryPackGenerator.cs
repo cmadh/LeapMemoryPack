@@ -34,6 +34,14 @@ public partial class MemoryPackGenerator : ISourceGenerator
         {
             generateContext.IsForUnity = !bool.Parse(nonUnity);
         }
+        if (context.AnalyzerConfigOptions.GlobalOptions.TryGetValue("build_property.MemoryPackGenerator_Use7BitEncodedHeaders", out var use7BitEncodedHeaders))
+        {
+            generateContext.Use7BitEncodedHeaders = bool.Parse(use7BitEncodedHeaders);
+        }
+        if (context.AnalyzerConfigOptions.GlobalOptions.TryGetValue("build_property.MemoryPackGenerator_UseObjectHeaders", out var useObjectHeaders))
+        {
+            generateContext.UseObjectHeaders = bool.Parse(useObjectHeaders);
+        }
 
         foreach (var syntax in receiver.ClassDeclarations)
         {
@@ -94,6 +102,8 @@ public partial class MemoryPackGenerator : ISourceGenerator
         public bool IsNet7OrGreater => false; // No IncrementalGenerator is always not NET7
 
         public bool IsForUnity { get; set; } = true;
+        public bool Use7BitEncodedHeaders { get; set; } = false;
+        public bool UseObjectHeaders { get; set; } = true;
 
         public void AddSource(string hintName, string source)
         {
