@@ -476,12 +476,14 @@ partial {{classOrStructOrRecord}} {{TypeName}}
 """;
         }
 
+        Console.WriteLine($"UseObjectHeaders is {context.UseObjectHeaders}");
         if (context.UseObjectHeaders)
             readObjectHeaderBody = $$"""
         if (!reader.TryReadObjectHeader(out var count))
         {
             value = default!;
             goto END;
+            // Test
         }
 """;
         else
