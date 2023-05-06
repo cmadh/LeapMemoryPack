@@ -483,7 +483,6 @@ partial {{classOrStructOrRecord}} {{TypeName}}
         {
             value = default!;
             goto END;
-            // Test
         }
 """;
         else
