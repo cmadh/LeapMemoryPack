@@ -476,7 +476,7 @@ partial {{classOrStructOrRecord}} {{TypeName}}
 """;
         }
 
-        if(context.UseObjectHeaders)
+        if (context.UseObjectHeaders)
             readObjectHeaderBody = $$"""
         if (!reader.TryReadObjectHeader(out var count))
         {
@@ -484,6 +484,8 @@ partial {{classOrStructOrRecord}} {{TypeName}}
             goto END;
         }
 """;
+        else
+            readObjectHeaderBody = $"byte count = {count};";
 
         return $$"""
 {{readObjectHeaderBody}}        

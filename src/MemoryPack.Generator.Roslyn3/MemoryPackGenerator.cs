@@ -103,7 +103,7 @@ public partial class MemoryPackGenerator : ISourceGenerator
 
         public bool IsForUnity { get; set; } = true;
         public bool Use7BitEncodedHeaders { get; set; } = false;
-        public bool UseObjectHeaders { get; set; } = true;
+        public bool UseObjectHeaders { get; set; } = false;
 
         public void AddSource(string hintName, string source)
         {

@@ -103,7 +103,7 @@ public partial class MemoryPackGenerator : IIncrementalGenerator
                 var (typeDeclaration, compilation) = source.Left.Item1;
                 var logPath = source.Left.Item2;
                 var (langVersion, net7) = source.Right;
-
+                
                 Generate(typeDeclaration, compilation, logPath, new GeneratorContext(context, langVersion, net7));
             });
         }
