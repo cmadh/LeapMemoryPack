@@ -101,7 +101,7 @@ public partial class MemoryPackGenerator : ISourceGenerator
 
         public bool IsNet7OrGreater => false; // No IncrementalGenerator is always not NET7
 
-        public bool IsForUnity { get; set; } = true;
+        public bool IsForUnity { get; set; } = false;
         public bool Use7BitEncodedHeaders { get; set; } = false;
         public bool UseObjectHeaders { get; set; } = false;
 
