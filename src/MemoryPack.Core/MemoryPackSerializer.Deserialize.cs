@@ -18,6 +18,14 @@ public static partial class MemoryPackSerializer
         return value;
     }
 
+    public static T? DeserializeWithFormatter<TFormatter, T>(ReadOnlySpan<byte> buffer, TFormatter formatter, MemoryPackSerializerOptions? options = default)
+        where TFormatter : IMemoryPackFormatter<T>
+    {
+        T? value = default;
+        DeserializeWithFormatter(buffer, ref value, ref formatter, options);
+        return value;
+    }
+
     public static int Deserialize<T>(ReadOnlySpan<byte> buffer, ref T? value, MemoryPackSerializerOptions? options = default)
     {
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
@@ -41,6 +49,39 @@ public static partial class MemoryPackSerializer
         try
         {
             reader.ReadValue(ref value);
+            return reader.Consumed;
+        }
+        finally
+        {
+            reader.Dispose();
+            state.Reset();
+        }
+    }
+
+    public static int DeserializeWithFormatter<TFormatter, T>(ReadOnlySpan<byte> buffer, ref T? value, ref TFormatter formatter, MemoryPackSerializerOptions? options = default)
+        where TFormatter : IMemoryPackFormatter<T>
+    {
+        if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            if (buffer.Length < Unsafe.SizeOf<T>())
+            {
+                MemoryPackSerializationException.ThrowInvalidRange(Unsafe.SizeOf<T>(), buffer.Length);
+            }
+            value = Unsafe.ReadUnaligned<T>(ref MemoryMarshal.GetReference(buffer));
+            return Unsafe.SizeOf<T>();
+        }
+
+        var state = threadStaticReaderOptionalState;
+        if (state == null)
+        {
+            state = threadStaticReaderOptionalState = new MemoryPackReaderOptionalState();
+        }
+        state.Init(options);
+
+        var reader = new MemoryPackReader(buffer, state);
+        try
+        {
+            value = reader.ReadValueWithFormatter<TFormatter, T>(formatter);
             return reader.Consumed;
         }
         finally

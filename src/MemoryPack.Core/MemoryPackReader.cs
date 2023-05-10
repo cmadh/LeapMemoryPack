@@ -258,25 +258,27 @@ public ref partial struct MemoryPackReader
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool TryReadUnionHeader(out ushort tag)
+    public bool TryReadUnionHeader(out byte tag)
     {
-        var firstTag = GetSpanReference(1);
-        Advance(1);
-        if (firstTag < MemoryPackCode.WideTag)
-        {
-            tag = firstTag;
-            return true;
-        }
-        else if (firstTag == MemoryPackCode.WideTag)
-        {
-            ReadUnmanaged(out tag);
-            return true;
-        }
-        else
-        {
-            tag = 0;
-            return false;
-        }
+        tag = ReadUnmanaged<byte>();
+        return true;
+        //var firstTag = GetSpanReference(1);
+        //Advance(1);
+        //if (firstTag < MemoryPackCode.WideTag)
+        //{
+        //    tag = firstTag;
+        //    return true;
+        //}
+        //else if (firstTag == MemoryPackCode.WideTag)
+        //{
+        //    ReadUnmanaged(out tag);
+        //    return true;
+        //}
+        //else
+        //{
+        //    tag = 0;
+        //    return false;
+        //}
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -734,6 +736,40 @@ public ref partial struct MemoryPackReader
     public unsafe T[]? DangerousReadUnmanagedArray<T>()
     {
         if (!TryReadCollectionHeader(out var length))
+        {
+            return null;
+        }
+
+        if (length == 0) return Array.Empty<T>();
+
+        var byteCount = length * Unsafe.SizeOf<T>();
+        ref var src = ref GetSpanReference(byteCount);
+        var dest = AllocateUninitializedArray<T>(length);
+        Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref GetArrayDataReference(dest)), ref src, (uint)byteCount);
+        Advance(byteCount);
+
+        return dest;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public unsafe T[]? DangerousReadUnmanagedArray<T>(int length)
+    {
+        if (length == 0) return Array.Empty<T>();
+
+        var byteCount = length * Unsafe.SizeOf<T>();
+        ref var src = ref GetSpanReference(byteCount);
+        var dest = AllocateUninitializedArray<T>(length);
+        Unsafe.CopyBlockUnaligned(ref Unsafe.As<T, byte>(ref GetArrayDataReference(dest)), ref src, (uint)byteCount);
+        Advance(byteCount);
+
+        return dest;
+    }
+
+    // T: should be unamanged type
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public unsafe T[]? DangerousReadLeapUnmanagedArray<T>()
+    {
+        if (!TryReadLeapCollectionHeader(out var length))
         {
             return null;
         }

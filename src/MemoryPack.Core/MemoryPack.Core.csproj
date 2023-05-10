@@ -78,6 +78,9 @@
       <TargetFiles1 Remove="Leap\LeapMemoryPackReader.cs" />
       <TargetFiles1 Remove="Leap\LeapMemoryPackWriter.cs" />
     </ItemGroup>
+    <ItemGroup>
+      <PackageReference Include="Serilog" Version="2.12.0" />
+    </ItemGroup>
 
     <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="$(TargetFramework) == 'net7.0'">
         <Copy SourceFiles="@(TargetFiles1)" DestinationFiles="$(DestinationRoot)\%(RecursiveDir)%(Filename)%(Extension)" SkipUnchangedFiles="true" />

@@ -1,6 +1,7 @@
 ﻿using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 using MemoryPack;
 
 namespace MemoryPack;
@@ -44,6 +45,7 @@ public ref partial struct MemoryPackWriter<TBufferWriter>
             WriteLeapNullCollectionHeader();
             return;
         }
+
         if (value.Length == 0)
         {
             WriteLeapCollectionHeader(0);
@@ -57,7 +59,21 @@ public ref partial struct MemoryPackWriter<TBufferWriter>
         ref var dest = ref GetSpanReference(allocSize);
         ref var src = ref Unsafe.As<T, byte>(ref GetArrayDataReference(value));
 
-        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint) srcLength);
+
+        Advance(allocSize);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void DangerousWriteLeapUnmanagedArray<T>(T[]? value, int length)
+    {
+        var srcLength = Unsafe.SizeOf<T>() * length;
+        var allocSize = srcLength; // Write7BitEncodedInt is calling Advance()
+
+        ref var dest = ref GetSpanReference(allocSize);
+        ref var src = ref Unsafe.As<T, byte>(ref GetArrayDataReference(value));
+
+        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint) srcLength);
 
         Advance(allocSize);
     }
@@ -82,13 +98,14 @@ public ref partial struct MemoryPackWriter<TBufferWriter>
         var allocSize = Get7BitEncodedAllocSize(value);
         // Write out an int 7 bits at a time.  The high bit of the byte,
         // when on, tells reader to continue reading more bytes.
-        var v = (uint)value;   // support negative numbers
+        var v = (uint) value; // support negative numbers
         while (v >= 0x80)
         {
-            Unsafe.WriteUnaligned(ref GetSpanReference(1), (byte)(v | 0x80));
+            Unsafe.WriteUnaligned(ref GetSpanReference(1), (byte) (v | 0x80));
             v >>= 7;
         }
-        Unsafe.WriteUnaligned(ref GetSpanReference(1), (byte)v);
+
+        Unsafe.WriteUnaligned(ref GetSpanReference(1), (byte) v);
         Advance(allocSize);
     }
 
@@ -118,8 +135,94 @@ public ref partial struct MemoryPackWriter<TBufferWriter>
 
         foreach (var leapString in value)
         {
-            Write7BitEncodedInt(leapString?.Length ?? 0);
-            WriteUtf8(leapString);
+            WriteLeapString(leapString);
         }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public unsafe void WriteLeapString(string value)
+    {
+        var bytes = Encoding.UTF8.GetBytes(value);
+        Write7BitEncodedInt(bytes.Length);
+        DangerousWriteLeapUnmanagedArray(bytes, bytes.Length);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteLeapSpan<T>(scoped Span<T?> value)
+    {
+        if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            DangerousWriteLeapUnmanagedSpan(value);
+            return;
+        }
+
+        var formatter = GetFormatter<T>();
+        WriteLeapCollectionHeader(value.Length);
+        for (int i = 0; i < value.Length; i++)
+        {
+            formatter.Serialize(ref this, ref value[i]);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void WriteLeapReadOnlySpan<T>(scoped ReadOnlySpan<T?> value)
+    {
+        if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            DangerousWriteLeapUnmanagedReadOnlySpan(value);
+            return;
+        }
+
+        var formatter = GetFormatter<T>();
+        WriteLeapCollectionHeader(value.Length);
+        for (int i = 0; i < value.Length; i++)
+        {
+            var elem = value[i];
+            formatter.Serialize(ref this, ref elem);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void DangerousWriteLeapUnmanagedSpan<T>(scoped Span<T> value)
+    {
+        if (value.Length == 0)
+        {
+            WriteLeapCollectionHeader(0);
+            return;
+        }
+
+        var srcLength = Unsafe.SizeOf<T>() * value.Length;
+        var allocSize = srcLength + 1;
+
+        ref var dest = ref GetSpanReference(allocSize);
+        ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(value));
+
+        Write7BitEncodedInt(value.Length);
+        //Unsafe.WriteUnaligned(ref dest, value.Length);
+        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 1), ref src, (uint)srcLength);
+
+        Advance(allocSize);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void DangerousWriteLeapUnmanagedReadOnlySpan<T>(scoped ReadOnlySpan<T> value)
+    {
+        if (value.Length == 0)
+        {
+            WriteLeapCollectionHeader(0);
+            return;
+        }
+
+        var srcLength = Unsafe.SizeOf<T>() * value.Length;
+        var allocSize = srcLength + 1;
+
+        ref var dest = ref GetSpanReference(allocSize);
+        ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(value));
+
+        Write7BitEncodedInt(value.Length);
+        //Unsafe.WriteUnaligned(ref dest, value.Length);
+        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 1), ref src, (uint)srcLength);
+
+        Advance(allocSize);
     }
 }

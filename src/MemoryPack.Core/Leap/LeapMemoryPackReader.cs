@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 //using System.Text.Unicode;
 using MemoryPack;
+using Serilog;
 #if NET7_0_OR_GREATER
 using static System.GC;
 using static System.Runtime.InteropServices.MemoryMarshal;
@@ -79,6 +80,29 @@ namespace MemoryPack
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousReadLeapUnmanagedArray<T>(scoped ref T[]? value, int length)
+        {
+            if (length == 0)
+            {
+                value = Array.Empty<T>();
+                return;
+            }
+
+            var byteCount = length * Unsafe.SizeOf<T>();
+            ref var src = ref GetSpanReference(byteCount);
+
+            if (value == null || value.Length != length)
+            {
+                value = AllocateUninitializedArray<T>(length);
+            }
+
+            ref var dest = ref Unsafe.As<T, byte>(ref GetArrayDataReference(value));
+            Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)byteCount);
+
+            Advance(byteCount);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadLeapCollectionHeader(out int length)
         {
             length = Read7BitEncodedInt();
@@ -88,7 +112,9 @@ namespace MemoryPack
             // If collection-length is larger than buffer-length, it is invalid data.
             if (Remaining < length)
             {
+                Log.Information("test1");
                 MemoryPackSerializationException.ThrowInsufficientBufferUnless(length);
+                Log.Information("test2");
             }
 
             return length != MemoryPackCode.NullCollection;
@@ -166,40 +192,18 @@ namespace MemoryPack
 
             for (int i = 0; i < value.Length; i++)
             {
-                var stringLength = Read7BitEncodedInt();
-                value[i] = ReadUtf8(stringLength);
+                value[i] = ReadLeapString();
             }
         }
 
-        //[MethodImpl(MethodImplOptions.NoInlining)]
-        //public unsafe string ReadUtf8(int utf8Length)
-        //{
-        //    utf8Length = ~utf8Length;
-        //    ref byte local = ref GetSpanReference(utf8Length + 4);
-        //    int length = Unsafe.ReadUnaligned<int>(ref local);
-        //    string str;
-        //    if (length <= 0)
-        //    {
-        //        str = Encoding.UTF8.GetString(MemoryMarshal.CreateReadOnlySpan<byte>(ref Unsafe.Add<byte>(ref local, 4), utf8Length));
-        //    }
-        //    else
-        //    {
-        //        long num = (Remaining + 1L) * 3L;
-        //        if (num < 0L)
-        //            num = (long)int.MaxValue;
-        //        if (num < (long)length)
-        //            MemoryPackSerializationException.ThrowInsufficientBufferUnless(utf8Length);
-        //        fixed (byte* numPtr = &Unsafe.Add<byte>(ref local, 4))
-        //            str = string.Create<(IntPtr, int)>(length, ((IntPtr)numPtr, utf8Length), (SpanAction<char, (IntPtr, int)>)((dest, state) =>
-        //            {
-        //                OperationStatus utf16 = Utf8.ToUtf16((ReadOnlySpan<byte>)MemoryMarshal.CreateSpan<byte>(ref Unsafe.AsRef<byte>((void*)state.Item1), state.Item2), dest, out int _, out int _, false);
-        //                if (utf16 == OperationStatus.Done)
-        //                    return;
-        //                MemoryPackSerializationException.ThrowFailedEncoding(utf16);
-        //            }));
-        //    }
-        //    Advance(utf8Length + 4);
-        //    return str;
-        //}
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public unsafe string ReadLeapString()
+        {
+            var stringLength = Read7BitEncodedInt();
+            if (stringLength != 0)
+                return Encoding.UTF8.GetString(DangerousReadUnmanagedArray<byte>(stringLength));
+            else
+                return string.Empty;
+        }
     }
 }

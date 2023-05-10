@@ -3,10 +3,10 @@
 public sealed class DynamicUnionFormatter<T> : MemoryPackFormatter<T>
     where T : class
 {
-    readonly Dictionary<Type, ushort> typeToTag;
-    readonly Dictionary<ushort, Type> tagToType;
+    readonly Dictionary<Type, byte> typeToTag;
+    readonly Dictionary<byte, Type> tagToType;
 
-    public DynamicUnionFormatter(params (ushort Tag, Type Type)[] memoryPackUnions)
+    public DynamicUnionFormatter(params (byte Tag, Type Type)[] memoryPackUnions)
     {
         typeToTag = memoryPackUnions.ToDictionary(x => x.Type, x => x.Tag);
         tagToType = memoryPackUnions.ToDictionary(x => x.Tag, x => x.Type);

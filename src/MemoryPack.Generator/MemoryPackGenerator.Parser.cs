@@ -571,6 +571,8 @@ partial class MemberMeta
     public bool HasExplicitOrder { get; }
     public MemberKind Kind { get; }
 
+    public bool IsNullable;
+
     MemberMeta(int order)
     {
         this.Symbol = null!;
@@ -617,7 +619,8 @@ partial class MemberMeta
 #endif
                 ;
             MemberType = f.Type;
-
+            if(f.NullableAnnotation == NullableAnnotation.Annotated)
+                IsNullable = true;
         }
         else if (symbol is IPropertySymbol p)
         {
@@ -630,6 +633,7 @@ partial class MemberMeta
 #endif
                 && (p.SetMethod != null && !p.SetMethod.IsInitOnly);
             MemberType = p.Type;
+            IsNullable = p.NullableAnnotation == NullableAnnotation.Annotated;
         }
         else
         {

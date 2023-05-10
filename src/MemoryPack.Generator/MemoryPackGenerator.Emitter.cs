@@ -476,7 +476,6 @@ partial {{classOrStructOrRecord}} {{TypeName}}
 """;
         }
 
-        Console.WriteLine($"UseObjectHeaders is {context.UseObjectHeaders}");
         if (context.UseObjectHeaders)
             readObjectHeaderBody = $$"""
         if (!reader.TryReadObjectHeader(out var count))
@@ -486,7 +485,7 @@ partial {{classOrStructOrRecord}} {{TypeName}}
         }
 """;
         else
-            readObjectHeaderBody = $"byte count = {count};";
+            readObjectHeaderBody = $"        byte count = {count};";
 
         return $$"""
 {{readObjectHeaderBody}}        
@@ -1242,51 +1241,90 @@ public partial class MemberMeta
 {
     public string EmitSerialize(string writer)
     {
-        switch (Kind)
+        string Body()
         {
-            case MemberKind.MemoryPackable:
-                return $"{writer}.WritePackable(value.@{Name});";
-            case MemberKind.Unmanaged:
-            case MemberKind.Enum:
-                return $"{writer}.WriteUnmanaged(value.@{Name});";
-            case MemberKind.UnmanagedNullable:
-                return $"{writer}.DangerousWriteUnmanaged(value.@{Name});";
-            case MemberKind.String:
-                return $"{writer}.WriteString(value.@{Name});";
-            case MemberKind.UnmanagedArray:
-                return $"{writer}.WriteUnmanagedArray(value.@{Name});";
-            case MemberKind.MemoryPackableArray:
-                return $"{writer}.WritePackableArray(value.@{Name});";
-            case MemberKind.MemoryPackableList:
-                return $"global::MemoryPack.Formatters.ListFormatter.SerializePackable(ref {writer}, ref System.Runtime.CompilerServices.Unsafe.AsRef(value.@{Name}));";
-            case MemberKind.Array:
-                return $"{writer}.WriteArray(value.@{Name});";
-            case MemberKind.Blank:
-                return "";
-            case MemberKind.CustomFormatter:
-                return $"{writer}.WriteValueWithFormatter(__{Name}Formatter, value.@{Name});";
-            default:
-                return $"{writer}.WriteValue(value.@{Name});";
-        }
+            switch (Kind)
+            {
+                case MemberKind.MemoryPackable:
+                    return $"{writer}.WritePackable(value.@{Name});";
+                case MemberKind.Unmanaged:
+                case MemberKind.Enum:
+                    return $"{writer}.WriteUnmanaged(value.@{Name});";
+                case MemberKind.UnmanagedNullable:
+                    return $"{writer}.DangerousWriteUnmanaged(value.@{Name});";
+                case MemberKind.String:
+                    return $"{writer}.WriteString(value.@{Name});";
+                case MemberKind.UnmanagedArray:
+                    return $"{writer}.WriteUnmanagedArray(value.@{Name});";
+                case MemberKind.MemoryPackableArray:
+                    return $"{writer}.WritePackableArray(value.@{Name});";
+                case MemberKind.MemoryPackableList:
+                    return
+                        $"global::MemoryPack.Formatters.ListFormatter.SerializePackable(ref {writer}, ref System.Runtime.CompilerServices.Unsafe.AsRef(value.@{Name}));";
+                case MemberKind.Array:
+                    return $"{writer}.WriteArray(value.@{Name});";
+                case MemberKind.Blank:
+                    return "";
+                case MemberKind.CustomFormatter:
+                    return $"{writer}.WriteValueWithFormatter(__{Name}Formatter, value.@{Name});";
+                default:
+                    return $"{writer}.WriteValue(value.@{Name});";
+            }
+        };
+
+        var retVal = "";
+        if (IsNullable)
+            retVal = $$"""
+    if (value.@{{Name}} is null)
+                {{writer}}.WriteUnmanaged(false);
+            else
+            {
+                {{writer}}.WriteUnmanaged(true);
+                {{Body()}}
+            }
+    """;
+        else
+            retVal = Body();
+
+        return retVal;
     }
 
     public string EmitVarIntLength()
     {
-        switch (Kind)
+        string Body()
         {
-            case MemberKind.Unmanaged:
-            case MemberKind.Enum:
-            case MemberKind.UnmanagedNullable:
-                return $"writer.WriteVarInt(System.Runtime.CompilerServices.Unsafe.SizeOf<{MemberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>());";
-            case MemberKind.String:
-                return $"writer.WriteVarInt(writer.GetStringWriteLength(value.@{Name}));";
-            case MemberKind.UnmanagedArray:
-                return $"writer.WriteVarInt(writer.GetUnmanageArrayWriteLength<{(MemberType as IArrayTypeSymbol)!.ElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>(value.@{Name}));";
-            case MemberKind.Blank:
-                return $"writer.WriteVarInt(0);";
-            default:
-                throw new InvalidOperationException("This MemberKind is not supported, Kind:" + Kind);
+            switch (Kind)
+            {
+                case MemberKind.Unmanaged:
+                case MemberKind.Enum:
+                case MemberKind.UnmanagedNullable:
+                    return $"writer.WriteVarInt(System.Runtime.CompilerServices.Unsafe.SizeOf<{MemberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>());";
+                case MemberKind.String:
+                    return $"writer.WriteVarInt(writer.GetStringWriteLength(value.@{Name}));";
+                case MemberKind.UnmanagedArray:
+                    return $"writer.WriteVarInt(writer.GetUnmanageArrayWriteLength<{(MemberType as IArrayTypeSymbol)!.ElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>(value.@{Name}));";
+                case MemberKind.Blank:
+                    return $"writer.WriteVarInt(0);";
+                default:
+                    throw new InvalidOperationException("This MemberKind is not supported, Kind:" + Kind);
+            }
         }
+
+        var retVal = "";
+        if (IsNullable)
+            retVal = $$"""
+    if (value.@{{Name}} is null)
+                writer.WriteUnmanaged(false);
+            else
+            {
+                writer.WriteUnmanaged(true);
+                {{Body()}}
+            }
+    """;
+        else
+            retVal = Body();
+
+        return retVal;
     }
 
     public string EmitReadToDeserialize(int i, bool requireDeltaCheck)
@@ -1299,35 +1337,62 @@ public partial class MemberMeta
             ? $"if (deltas[{i}] == 0) {equalDefault} else "
             : "";
 
-        switch (Kind)
+        string Body()
         {
-            case MemberKind.MemoryPackable:
-                return $"{pre}__{Name} = reader.ReadPackable<{MemberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>();";
-            case MemberKind.Unmanaged:
-            case MemberKind.Enum:
-                return $"{pre}reader.ReadUnmanaged(out __{Name});";
-            case MemberKind.UnmanagedNullable:
-                return $"{pre}reader.DangerousReadUnmanaged(out __{Name});";
-            case MemberKind.String:
-                return $"{pre}__{Name} = reader.ReadString();";
-            case MemberKind.UnmanagedArray:
-                return $"{pre}__{Name} = reader.ReadUnmanagedArray<{(MemberType as IArrayTypeSymbol)!.ElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>();";
-            case MemberKind.MemoryPackableArray:
-                return $"{pre}__{Name} = reader.ReadPackableArray<{(MemberType as IArrayTypeSymbol)!.ElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>();";
-            case MemberKind.MemoryPackableList:
-                return $"{pre}__{Name} = global::MemoryPack.Formatters.ListFormatter.DeserializePackable<{(MemberType as INamedTypeSymbol)!.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>(ref reader);";
-            case MemberKind.Array:
-                return $"{pre}__{Name} = reader.ReadArray<{(MemberType as IArrayTypeSymbol)!.ElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>();";
-            case MemberKind.Blank:
-                return $"{pre}reader.Advance(deltas[{i}]);";
-            case MemberKind.CustomFormatter:
+            switch (Kind)
+            {
+                case MemberKind.MemoryPackable:
+                    return
+                        $"{pre}__{Name} = reader.ReadPackable<{MemberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>();";
+                case MemberKind.Unmanaged:
+                case MemberKind.Enum:
+                    return $"{pre}reader.ReadUnmanaged(out __{Name});";
+                case MemberKind.UnmanagedNullable:
+                    return $"{pre}reader.DangerousReadUnmanaged(out __{Name});";
+                case MemberKind.String:
+                    return $"{pre}__{Name} = reader.ReadString();";
+                case MemberKind.UnmanagedArray:
+                    return
+                        $"{pre}__{Name} = reader.ReadUnmanagedArray<{(MemberType as IArrayTypeSymbol)!.ElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>();";
+                case MemberKind.MemoryPackableArray:
+                    return
+                        $"{pre}__{Name} = reader.ReadPackableArray<{(MemberType as IArrayTypeSymbol)!.ElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>();";
+                case MemberKind.MemoryPackableList:
+                    return
+                        $"{pre}__{Name} = global::MemoryPack.Formatters.ListFormatter.DeserializePackable<{(MemberType as INamedTypeSymbol)!.TypeArguments[0].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>(ref reader);";
+                case MemberKind.Array:
+                    return
+                        $"{pre}__{Name} = reader.ReadArray<{(MemberType as IArrayTypeSymbol)!.ElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>();";
+                case MemberKind.Blank:
+                    return $"{pre}reader.Advance(deltas[{i}]);";
+                case MemberKind.CustomFormatter:
                 {
                     var mt = MemberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    return $"{pre}__{Name} = reader.ReadValueWithFormatter<{CustomFormatterName}, {mt}>(__{Name}Formatter);";
+                    return
+                        $"{pre}__{Name} = reader.ReadValueWithFormatter<{CustomFormatterName}, {mt}>(__{Name}Formatter);";
                 }
-            default:
-                return $"{pre}__{Name} = reader.ReadValue<{MemberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>();";
+                default:
+                    return
+                        $"{pre}__{Name} = reader.ReadValue<{MemberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>();";
+            }
         }
+
+        var retVal = "";
+        if (IsNullable)
+            retVal = $$"""
+    if (reader.ReadUnmanaged<bool>())
+                    {
+                        {{Body()}}
+                    }
+                    else
+                    {
+                        {{pre}}__{{Name}} = null;
+                    }
+    """;
+        else
+            retVal = Body();
+
+        return retVal;
     }
 
     public string EmitReadRefDeserialize(int i, bool requireDeltaCheck)
@@ -1336,32 +1401,48 @@ public partial class MemberMeta
             ? $"if (deltas[{i}] != 0) "
             : "";
 
-        switch (Kind)
+        string Body()
         {
-            case MemberKind.MemoryPackable:
-                return $"{pre}reader.ReadPackable(ref __{Name});";
-            case MemberKind.Unmanaged:
-            case MemberKind.Enum:
-                return $"{pre}reader.ReadUnmanaged(out __{Name});";
-            case MemberKind.UnmanagedNullable:
-                return $"{pre}reader.DangerousReadUnmanaged(out __{Name});";
-            case MemberKind.String:
-                return $"{pre}__{Name} = reader.ReadString();";
-            case MemberKind.UnmanagedArray:
-                return $"{pre}reader.ReadUnmanagedArray(ref __{Name});";
-            case MemberKind.MemoryPackableArray:
-                return $"{pre}reader.ReadPackableArray(ref __{Name});";
-            case MemberKind.MemoryPackableList:
-                return $"{pre}global::MemoryPack.Formatters.ListFormatter.DeserializePackable(ref reader, ref __{Name});";
-            case MemberKind.Array:
-                return $"{pre}reader.ReadArray(ref __{Name});";
-            case MemberKind.Blank:
-                return $"{pre}reader.Advance(deltas[{i}]);";
-            case MemberKind.CustomFormatter:
-                return $"{pre}reader.ReadValueWithFormatter(__{Name}Formatter, ref __{Name});";
-            default:
-                return $"{pre}reader.ReadValue(ref __{Name});";
+            switch (Kind)
+            {
+                case MemberKind.MemoryPackable:
+                    return $"{pre}reader.ReadPackable(ref __{Name});";
+                case MemberKind.Unmanaged:
+                case MemberKind.Enum:
+                    return $"{pre}reader.ReadUnmanaged(out __{Name});";
+                case MemberKind.UnmanagedNullable:
+                    return $"{pre}reader.DangerousReadUnmanaged(out __{Name});";
+                case MemberKind.String:
+                    return $"{pre}__{Name} = reader.ReadString();";
+                case MemberKind.UnmanagedArray:
+                    return $"{pre}reader.ReadUnmanagedArray(ref __{Name});";
+                case MemberKind.MemoryPackableArray:
+                    return $"{pre}reader.ReadPackableArray(ref __{Name});";
+                case MemberKind.MemoryPackableList:
+                    return
+                        $"{pre}global::MemoryPack.Formatters.ListFormatter.DeserializePackable(ref reader, ref __{Name});";
+                case MemberKind.Array:
+                    return $"{pre}reader.ReadArray(ref __{Name});";
+                case MemberKind.Blank:
+                    return $"{pre}reader.Advance(deltas[{i}]);";
+                case MemberKind.CustomFormatter:
+                    return $"{pre}reader.ReadValueWithFormatter(__{Name}Formatter, ref __{Name});";
+                default:
+                    return $"{pre}reader.ReadValue(ref __{Name});";
+            }
         }
+        var retVal = "";
+        if (IsNullable)
+            retVal = $$"""
+    if ({{pre}}reader.ReadUnmanaged<bool>())
+                    {
+                        {{Body()}}
+                    }
+    """;
+        else
+            retVal = Body();
+
+        return retVal;
     }
 }
 

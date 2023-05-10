@@ -375,6 +375,52 @@ public ref partial struct MemoryPackWriter<TBufferWriter>
         Advance(bytesWritten + 8); // + header
     }
 
+//    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+//    public void WriteLeapString(string? value)
+//    {
+//        if (value == null)
+//        {
+//            Write7BitEncodedInt(0);
+//            return;
+//        }
+
+//        if (value.Length == 0)
+//        {
+//            Write7BitEncodedInt(0);
+//            return;
+//        }
+
+//        // (int ~utf8-byte-count, int utf16-length, utf8-bytes)
+//        Write7BitEncodedInt(value.Length);
+
+//        WriteSpanWithoutLengthHeader(value.AsSpan()); // Advances
+
+////        var source = value.AsSpan();
+
+////        // UTF8.GetMaxByteCount -> (length + 1) * 3
+////        var maxByteCount = (source.Length + 1) * 3;
+
+////        ref var destPointer = ref GetSpanReference(maxByteCount + 8); // header
+
+////        // write utf16-length
+////        Unsafe.WriteUnaligned(ref Unsafe.Add(ref destPointer, 4), source.Length);
+
+////        var dest = MemoryMarshal.CreateSpan(ref Unsafe.Add(ref destPointer, 8), maxByteCount);
+////#if NET7_0_OR_GREATER
+////        var status = Utf8.FromUtf16(source, dest, out var _, out var bytesWritten, replaceInvalidSequences: false);
+////        if (status != OperationStatus.Done)
+////        {
+////            MemoryPackSerializationException.ThrowFailedEncoding(status);
+////        }
+////#else
+////        var bytesWritten = Encoding.UTF8.GetBytes(value, dest);
+////#endif
+
+////        // write written utf8-length in header, that is ~length
+////        Unsafe.WriteUnaligned(ref destPointer, ~bytesWritten);
+//        //Advance(bytesWritten + 8); // + header
+//    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void WriteUtf8(ReadOnlySpan<byte> utf8Value, int utf16Length = -1)
     {
