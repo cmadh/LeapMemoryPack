@@ -1273,7 +1273,7 @@ public partial class MemberMeta
         };
 
         var retVal = "";
-        if (IsNullable || Kind == MemberKind.UnmanagedNullable)
+        if (IsNullable)
             retVal = $$"""
     if (value.@{{Name}} is null)
                 {{writer}}.WriteUnmanaged(false);
@@ -1311,7 +1311,7 @@ public partial class MemberMeta
         }
 
         var retVal = "";
-        if (IsNullable || Kind == MemberKind.UnmanagedNullable)
+        if (IsNullable)
             retVal = $$"""
     if (value.@{{Name}} is null)
                 writer.WriteUnmanaged(false);
@@ -1377,8 +1377,8 @@ public partial class MemberMeta
             }
         }
 
-        string retVal;
-        if (IsNullable || Kind == MemberKind.UnmanagedNullable)
+        var retVal = "";
+        if (IsNullable)
             retVal = $$"""
     if (reader.ReadUnmanaged<bool>())
                     {
@@ -1431,9 +1431,8 @@ public partial class MemberMeta
                     return $"{pre}reader.ReadValue(ref __{Name});";
             }
         }
-
-        string retVal;
-        if (IsNullable || Kind == MemberKind.UnmanagedNullable)
+        var retVal = "";
+        if (IsNullable)
             retVal = $$"""
     if ({{pre}}reader.ReadUnmanaged<bool>())
                     {

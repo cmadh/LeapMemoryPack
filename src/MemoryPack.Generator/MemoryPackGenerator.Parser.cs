@@ -619,7 +619,8 @@ partial class MemberMeta
 #endif
                 ;
             MemberType = f.Type;
-            IsNullable = f.NullableAnnotation == NullableAnnotation.Annotated || MemberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).EndsWith("?");
+            if(f.NullableAnnotation == NullableAnnotation.Annotated)
+                IsNullable = true;
         }
         else if (symbol is IPropertySymbol p)
         {
@@ -632,7 +633,7 @@ partial class MemberMeta
 #endif
                 && (p.SetMethod != null && !p.SetMethod.IsInitOnly);
             MemberType = p.Type;
-            IsNullable = p.NullableAnnotation == NullableAnnotation.Annotated || MemberType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).EndsWith("?");
+            IsNullable = p.NullableAnnotation == NullableAnnotation.Annotated;
         }
         else
         {
