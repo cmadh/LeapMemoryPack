@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Reflection.PortableExecutable;
 using System.Text;
 
 namespace MemoryPack.Generator;
@@ -780,6 +781,25 @@ partial {{classOrStructOrRecord}} {{TypeName}}
                 continue;
             }
 
+            if (members[i].IsNullable || members[i].Kind == MemberKind.UnmanagedNullable)
+            {
+                var body = $$"""
+                if (value.@{{members[i].Name}} == null)
+                {{indent}}{
+                    {{indent}}{{writer}}.DangerousWriteUnmanaged(false);
+                {{indent}}}
+                {{indent}}else
+                {{indent}}{
+                    {{indent}}{{writer}}.DangerousWriteUnmanaged(true);
+                    {{indent}}{{writer}}.DangerousWriteUnmanaged(value.@{{members[i].Name}});
+                {{indent}}}
+
+                """;
+                sb.Append(indent);
+                sb.Append(body);
+                continue;
+            }
+
             // search optimization
             var optimizeFrom = i;
             var optimizeTo = i;
@@ -852,6 +872,23 @@ partial {{classOrStructOrRecord}} {{TypeName}}
             {
                 sb.Append(indent);
                 sb.AppendLine(members[i].EmitReadToDeserialize(i, GenerateType is GenerateType.VersionTolerant or GenerateType.CircularReference));
+                continue;
+            }
+
+            if (members[i].IsNullable || members[i].Kind == MemberKind.UnmanagedNullable)
+            {
+                var body = $$"""
+                {{indent}}if (reader.ReadUnmanaged<bool>())
+                {{indent}}{
+                    {{indent}}reader.DangerousReadUnmanaged(out __{{members[i].Name}});
+                {{indent}}}
+                {{indent}}else
+                {{indent}}{
+                    {{indent}}__{{members[i].Name}} = null;
+                {{indent}}}
+
+                """;
+                sb.Append(body);
                 continue;
             }
 
@@ -1251,7 +1288,7 @@ public partial class MemberMeta
                 case MemberKind.Enum:
                     return $"{writer}.WriteUnmanaged(value.@{Name});";
                 case MemberKind.UnmanagedNullable:
-                    return $"{writer}.DangerousWriteUnmanaged(value.@{Name});";
+                    return $"{writer}.DangerousWriteUnmanaged(value.@{Name});//Test";
                 case MemberKind.String:
                     return $"{writer}.WriteString(value.@{Name});";
                 case MemberKind.UnmanagedArray:
@@ -1273,7 +1310,7 @@ public partial class MemberMeta
         };
 
         var retVal = "";
-        if (IsNullable)
+        if (IsNullable || Kind == MemberKind.UnmanagedNullable)
             retVal = $$"""
     if (value.@{{Name}} is null)
                 {{writer}}.WriteUnmanaged(false);
@@ -1311,7 +1348,7 @@ public partial class MemberMeta
         }
 
         var retVal = "";
-        if (IsNullable)
+        if (IsNullable || Kind == MemberKind.UnmanagedNullable)
             retVal = $$"""
     if (value.@{{Name}} is null)
                 writer.WriteUnmanaged(false);
@@ -1348,7 +1385,7 @@ public partial class MemberMeta
                 case MemberKind.Enum:
                     return $"{pre}reader.ReadUnmanaged(out __{Name});";
                 case MemberKind.UnmanagedNullable:
-                    return $"{pre}reader.DangerousReadUnmanaged(out __{Name});";
+                    return $"{pre}reader.DangerousReadUnmanaged(out __{Name});//Test";
                 case MemberKind.String:
                     return $"{pre}__{Name} = reader.ReadString();";
                 case MemberKind.UnmanagedArray:
@@ -1378,7 +1415,7 @@ public partial class MemberMeta
         }
 
         var retVal = "";
-        if (IsNullable)
+        if (IsNullable || Kind == MemberKind.UnmanagedNullable)
             retVal = $$"""
     if (reader.ReadUnmanaged<bool>())
                     {
@@ -1411,7 +1448,7 @@ public partial class MemberMeta
                 case MemberKind.Enum:
                     return $"{pre}reader.ReadUnmanaged(out __{Name});";
                 case MemberKind.UnmanagedNullable:
-                    return $"{pre}reader.DangerousReadUnmanaged(out __{Name});";
+                    return $"{pre}reader.DangerousReadUnmanaged(out __{Name});//Test";
                 case MemberKind.String:
                     return $"{pre}__{Name} = reader.ReadString();";
                 case MemberKind.UnmanagedArray:
@@ -1432,7 +1469,7 @@ public partial class MemberMeta
             }
         }
         var retVal = "";
-        if (IsNullable)
+        if (IsNullable || Kind == MemberKind.UnmanagedNullable)
             retVal = $$"""
     if ({{pre}}reader.ReadUnmanaged<bool>())
                     {
