@@ -338,7 +338,7 @@ public partial class TypeMeta
                 fixedSizeMethod = $$"""
 
     [global::MemoryPack.Internal.Preserve]
-    static int global::MemoryPack.IFixedSizeMemoryPackable.Size => {{headerPlus}}{{sizeOf}};
+    static int global::MemoryPack.IFixedSizeMemoryPackable.Size => {{sizeOf}};
 
 """;
             }

@@ -73,7 +73,8 @@ public ref partial struct MemoryPackWriter<TBufferWriter>
         ref var dest = ref GetSpanReference(allocSize);
         ref var src = ref Unsafe.As<T, byte>(ref GetArrayDataReference(value));
 
-        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint) srcLength);
+//        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint) srcLength);
+        Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint) srcLength);
 
         Advance(allocSize);
     }
@@ -95,7 +96,7 @@ public ref partial struct MemoryPackWriter<TBufferWriter>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Write7BitEncodedInt(int value)
     {
-        var allocSize = Get7BitEncodedAllocSize(value);
+        var allocSize = 1;
         // Write out an int 7 bits at a time.  The high bit of the byte,
         // when on, tells reader to continue reading more bytes.
         var v = (uint) value; // support negative numbers
@@ -103,6 +104,7 @@ public ref partial struct MemoryPackWriter<TBufferWriter>
         {
             Unsafe.WriteUnaligned(ref GetSpanReference(1), (byte) (v | 0x80));
             v >>= 7;
+            allocSize++;
         }
 
         Unsafe.WriteUnaligned(ref GetSpanReference(1), (byte) v);
