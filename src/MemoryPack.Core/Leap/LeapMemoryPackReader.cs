@@ -112,9 +112,7 @@ namespace MemoryPack
             // If collection-length is larger than buffer-length, it is invalid data.
             if (Remaining < length)
             {
-                Log.Information("test1");
                 MemoryPackSerializationException.ThrowInsufficientBufferUnless(length);
-                Log.Information("test2");
             }
 
             return length != MemoryPackCode.NullCollection;
