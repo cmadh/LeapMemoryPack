@@ -242,6 +242,33 @@ public sealed class ReusableLinkedArrayBufferWriter : IBufferWriter<byte>
         ResetCore();
     }
 
+    public void WriteToAndReset(Stream stream)
+    {
+        if (totalWritten == 0) return;
+
+        if (UseFirstBuffer)
+        {
+            stream.Write(firstBuffer.AsSpan(0, firstBufferWritten));
+        }
+
+        if (buffers.Count > 0)
+        {
+            foreach (var item in buffers)
+            {
+                stream.Write(item.WrittenBuffer);
+                item.Clear(); // reset
+            }
+        }
+
+        if (!current.IsNull)
+        {
+            stream.Write(current.WrittenBuffer);
+            current.Clear();
+        }
+
+        ResetCore();
+    }
+
     public Enumerator GetEnumerator()
     {
         return new Enumerator(this);

@@ -102,6 +102,30 @@ namespace MemoryPack
             Advance(byteCount);
         }
 
+        // Array is copied into value
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousReadCopyLeapUnmanagedArray<T>(scoped ref T[]? value, int length)
+        {
+            if (length == 0)
+            {
+                value = Array.Empty<T>();
+                return;
+            }
+
+            var byteCount = length * Unsafe.SizeOf<T>();
+            ref var src = ref GetSpanReference(byteCount);
+
+            if (value?.Length < length)
+            {
+                throw new Exception("Array too small");
+            }
+
+            ref var dest = ref Unsafe.As<T, byte>(ref GetArrayDataReference(value));
+            Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)byteCount);
+
+            Advance(byteCount);
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadLeapCollectionHeader(out int length)
         {

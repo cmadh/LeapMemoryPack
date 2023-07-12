@@ -82,6 +82,37 @@ public static partial class MemoryPackSerializer
         }
     }
 
+    public static async ValueTask SerializeWithFormatterAsync<TFormatter, TType>(TFormatter formatter, Stream stream, TType? value, MemoryPackSerializerOptions? options = default, CancellationToken cancellationToken = default)
+        where TFormatter : MemoryPackFormatter<TType>
+    {
+        var tempWriter = ReusableLinkedArrayBufferWriterPool.Rent();
+        try
+        {
+            SerializeToTempWriterWithFormatter(formatter, tempWriter, value, options);
+            await tempWriter.WriteToAndResetAsync(stream, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            ReusableLinkedArrayBufferWriterPool.Return(tempWriter);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void SerializeWithFormatter<TFormatter, TType>(TFormatter formatter, Stream stream, TType? value, MemoryPackSerializerOptions? options = default)
+        where TFormatter : MemoryPackFormatter<TType>
+    {
+        var tempWriter = ReusableLinkedArrayBufferWriterPool.Rent();
+        try
+        {
+            SerializeToTempWriterWithFormatter(formatter, tempWriter, value, options);
+            tempWriter.WriteToAndReset(stream);
+        }
+        finally
+        {
+            ReusableLinkedArrayBufferWriterPool.Return(tempWriter);
+        }
+    }
+
     static void SerializeToTempWriter(ReusableLinkedArrayBufferWriter bufferWriter, Type type, object? value, MemoryPackSerializerOptions? options)
     {
         var state = threadStaticWriterOptionalState;
@@ -96,6 +127,30 @@ public static partial class MemoryPackSerializer
         try
         {
             Serialize(type, ref writer, value);
+        }
+        finally
+        {
+            state.Reset();
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    static void SerializeToTempWriterWithFormatter<TFormatter, TType>(TFormatter formatter, ReusableLinkedArrayBufferWriter bufferWriter, TType? value, MemoryPackSerializerOptions? options)
+        where TFormatter : MemoryPackFormatter<TType>
+    {
+        var state = threadStaticWriterOptionalState;
+        if (state == null)
+        {
+            state = threadStaticWriterOptionalState = new MemoryPackWriterOptionalState();
+        }
+        state.Init(options);
+
+        var writer = new MemoryPackWriter<ReusableLinkedArrayBufferWriter>(ref bufferWriter, state);
+
+        try
+        {
+            formatter.Serialize(ref writer, ref value);
+            writer.Flush();
         }
         finally
         {

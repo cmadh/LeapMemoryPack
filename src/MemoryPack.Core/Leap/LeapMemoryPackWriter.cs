@@ -68,15 +68,14 @@ public ref partial struct MemoryPackWriter<TBufferWriter>
     public void DangerousWriteLeapUnmanagedArray<T>(T[]? value, int length)
     {
         var srcLength = Unsafe.SizeOf<T>() * length;
-        var allocSize = srcLength; // Write7BitEncodedInt is calling Advance()
 
-        ref var dest = ref GetSpanReference(allocSize);
+        ref var dest = ref GetSpanReference(srcLength);
         ref var src = ref Unsafe.As<T, byte>(ref GetArrayDataReference(value));
 
 //        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint) srcLength);
         Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint) srcLength);
 
-        Advance(allocSize);
+        Advance(srcLength);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
